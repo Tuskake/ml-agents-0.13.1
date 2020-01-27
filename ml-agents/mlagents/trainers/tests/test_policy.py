@@ -1,5 +1,5 @@
 from mlagents.trainers.tf_policy import TFPolicy
-from mlagents_envs.base_env import BatchedStepResult, AgentGroupSpec
+from mlagents.trainers.brain import BrainInfo
 from mlagents.trainers.action_info import ActionInfo
 from unittest.mock import MagicMock
 import numpy as np
@@ -18,11 +18,9 @@ def basic_params():
 def test_take_action_returns_empty_with_no_agents():
     test_seed = 3
     policy = TFPolicy(test_seed, basic_mock_brain(), basic_params())
-    # Doesn't really matter what this is
-    dummy_groupspec = AgentGroupSpec([(1,)], "continuous", 1)
-    no_agent_step = BatchedStepResult.empty(dummy_groupspec)
-    result = policy.get_action(no_agent_step)
-    assert result == ActionInfo.empty()
+    no_agent_brain_info = BrainInfo([], [], [], agents=[])
+    result = policy.get_action(no_agent_brain_info)
+    assert result == ActionInfo([], [], {})
 
 
 def test_take_action_returns_nones_on_missing_values():
@@ -30,16 +28,11 @@ def test_take_action_returns_nones_on_missing_values():
     policy = TFPolicy(test_seed, basic_mock_brain(), basic_params())
     policy.evaluate = MagicMock(return_value={})
     policy.save_memories = MagicMock()
-    step_with_agents = BatchedStepResult(
-        [],
-        np.array([], dtype=np.float32),
-        np.array([False], dtype=np.bool),
-        np.array([], dtype=np.bool),
-        np.array([0]),
-        None,
+    brain_info_with_agents = BrainInfo(
+        [], [], [], agents=["an-agent-id"], local_done=[False]
     )
-    result = policy.get_action(step_with_agents, worker_id=0)
-    assert result == ActionInfo(None, None, {}, [0])
+    result = policy.get_action(brain_info_with_agents)
+    assert result == ActionInfo(None, None, {})
 
 
 def test_take_action_returns_action_info_when_available():
@@ -51,16 +44,11 @@ def test_take_action_returns_action_info_when_available():
         "value": np.array([1.1], dtype=np.float32),
     }
     policy.evaluate = MagicMock(return_value=policy_eval_out)
-    step_with_agents = BatchedStepResult(
-        [],
-        np.array([], dtype=np.float32),
-        np.array([False], dtype=np.bool),
-        np.array([], dtype=np.bool),
-        np.array([0]),
-        None,
+    brain_info_with_agents = BrainInfo(
+        [], [], [], agents=["an-agent-id"], local_done=[False]
     )
-    result = policy.get_action(step_with_agents)
+    result = policy.get_action(brain_info_with_agents)
     expected = ActionInfo(
-        policy_eval_out["action"], policy_eval_out["value"], policy_eval_out, [0]
+        policy_eval_out["action"], policy_eval_out["value"], policy_eval_out
     )
     assert result == expected

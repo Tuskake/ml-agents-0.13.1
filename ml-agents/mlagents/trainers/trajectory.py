@@ -32,30 +32,16 @@ class SplitObservations(NamedTuple):
         """
         vis_obs_list: List[np.ndarray] = []
         vec_obs_list: List[np.ndarray] = []
-        last_obs = None
         for observation in obs:
-            # Obs could be batched or single
-            if len(observation.shape) == 1 or len(observation.shape) == 2:
+            if len(observation.shape) == 1:
                 vec_obs_list.append(observation)
-            if len(observation.shape) == 3 or len(observation.shape) == 4:
+            if len(observation.shape) == 3:
                 vis_obs_list.append(observation)
-            last_obs = observation
-        if last_obs is not None:
-            is_batched = len(last_obs.shape) == 2 or len(last_obs.shape) == 4
-            if is_batched:
-                vec_obs = (
-                    np.concatenate(vec_obs_list, axis=1)
-                    if len(vec_obs_list) > 0
-                    else np.zeros((last_obs.shape[0], 0), dtype=np.float32)
-                )
-            else:
-                vec_obs = (
-                    np.concatenate(vec_obs_list, axis=0)
-                    if len(vec_obs_list) > 0
-                    else np.array([], dtype=np.float32)
-                )
-        else:
-            vec_obs = []
+        vec_obs = (
+            np.concatenate(vec_obs_list, axis=0)
+            if len(vec_obs_list) > 0
+            else np.array([], dtype=np.float32)
+        )
         return SplitObservations(
             vector_observations=vec_obs, visual_observations=vis_obs_list
         )
@@ -114,16 +100,11 @@ class Trajectory(NamedTuple):
             agent_buffer_trajectory["actions"].append(exp.action)
             agent_buffer_trajectory["action_probs"].append(exp.action_probs)
 
-            # Store action masks if necessary. Note that 1 means active, while
-            # in AgentExperience False means active.
+            # Store action masks if necessary. Eventually these will be
+            # None for continuous actions
             if exp.action_mask is not None:
-                mask = 1 - np.concatenate(exp.action_mask)
-                agent_buffer_trajectory["action_mask"].append(mask, padding_value=1)
-            else:
-                # This should never be needed unless the environment somehow doesn't supply the
-                # action mask in a discrete space.
                 agent_buffer_trajectory["action_mask"].append(
-                    np.ones(exp.action_probs.shape, dtype=np.float32), padding_value=1
+                    exp.action_mask, padding_value=1
                 )
 
             agent_buffer_trajectory["prev_action"].append(exp.prev_action)

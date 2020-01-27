@@ -26,7 +26,6 @@ If you would like to contribute environments, please see our
 * Goal: Move to the most reward state.
 * Agents: The environment contains one agent.
 * Agent Reward Function:
-  * -0.01 at each step
   * +0.1 for arriving at suboptimal state.
   * +1.0 for arriving at optimal state.
 * Behavior Parameters:
@@ -35,7 +34,7 @@ If you would like to contribute environments, please see our
     right).
   * Visual Observations: None
 * Float Properties: None
-* Benchmark Mean Reward: 0.93
+* Benchmark Mean Reward: 0.94
 
 ## [3DBall: 3D Balance Ball](https://youtu.be/dheeCO29-EI)
 

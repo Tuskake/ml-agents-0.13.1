@@ -13,8 +13,7 @@ from tensorflow.python.framework import graph_util
 from mlagents.trainers import tensorflow_to_barracuda as tf2bc
 from mlagents.trainers.trajectory import SplitObservations
 from mlagents.trainers.buffer import AgentBuffer
-from mlagents.trainers.brain_conversion_utils import get_global_agent_id
-from mlagents_envs.base_env import BatchedStepResult
+from mlagents.trainers.brain import BrainInfo
 
 
 logger = logging.getLogger("mlagents.trainers")
@@ -110,56 +109,37 @@ class TFPolicy(Policy):
                 )
             self.saver.restore(self.sess, ckpt.model_checkpoint_path)
 
-    def evaluate(
-        self, batched_step_result: BatchedStepResult, global_agent_ids: List[str]
-    ) -> Dict[str, Any]:
+    def evaluate(self, brain_info: BrainInfo) -> Dict[str, Any]:
         """
         Evaluates policy for the agent experiences provided.
-        :param batched_step_result: BatchedStepResult input to network.
+        :param brain_info: BrainInfo input to network.
         :return: Output from policy based on self.inference_dict.
         """
         raise UnityPolicyException("The evaluate function was not implemented.")
 
-    def get_action(
-        self, batched_step_result: BatchedStepResult, worker_id: int = 0
-    ) -> ActionInfo:
+    def get_action(self, brain_info: BrainInfo) -> ActionInfo:
         """
         Decides actions given observations information, and takes them in environment.
-        :param batched_step_result: A dictionary of brain names and BatchedStepResult from environment.
-        :param worker_id: In parallel environment training, the unique id of the environment worker that
-            the BatchedStepResult came from. Used to construct a globally unique id for each agent.
+        :param brain_info: A dictionary of brain names and BrainInfo from environment.
         :return: an ActionInfo containing action, memories, values and an object
         to be passed to add experiences
         """
-        if batched_step_result.n_agents() == 0:
-            return ActionInfo.empty()
+        if len(brain_info.agents) == 0:
+            return ActionInfo([], [], {})
 
         agents_done = [
             agent
-            for agent, done in zip(
-                batched_step_result.agent_id, batched_step_result.done
-            )
+            for agent, done in zip(brain_info.agents, brain_info.local_done)
             if done
         ]
 
         self.remove_memories(agents_done)
         self.remove_previous_action(agents_done)
 
-        global_agent_ids = [
-            get_global_agent_id(worker_id, int(agent_id))
-            for agent_id in batched_step_result.agent_id
-        ]  # For 1-D array, the iterator order is correct.
-
-        run_out = self.evaluate(  # pylint: disable=assignment-from-no-return
-            batched_step_result, global_agent_ids
-        )
-
-        self.save_memories(global_agent_ids, run_out.get("memory_out"))
+        run_out = self.evaluate(brain_info)  # pylint: disable=assignment-from-no-return
+        self.save_memories(brain_info.agents, run_out.get("memory_out"))
         return ActionInfo(
-            action=run_out.get("action"),
-            value=run_out.get("value"),
-            outputs=run_out,
-            agent_ids=batched_step_result.agent_id,
+            action=run_out.get("action"), value=run_out.get("value"), outputs=run_out
         )
 
     def update(self, mini_batch, num_sequences):
@@ -182,23 +162,13 @@ class TFPolicy(Policy):
         run_out = dict(zip(list(out_dict.keys()), network_out))
         return run_out
 
-    def fill_eval_dict(self, feed_dict, batched_step_result):
-        vec_vis_obs = SplitObservations.from_observations(batched_step_result.obs)
-        for i, _ in enumerate(vec_vis_obs.visual_observations):
-            feed_dict[self.model.visual_in[i]] = vec_vis_obs.visual_observations[i]
+    def fill_eval_dict(self, feed_dict, brain_info):
+        for i, _ in enumerate(brain_info.visual_observations):
+            feed_dict[self.model.visual_in[i]] = brain_info.visual_observations[i]
         if self.use_vec_obs:
-            feed_dict[self.model.vector_in] = vec_vis_obs.vector_observations
+            feed_dict[self.model.vector_in] = brain_info.vector_observations
         if not self.use_continuous_act:
-            mask = np.ones(
-                (
-                    batched_step_result.n_agents(),
-                    np.sum(self.brain.vector_action_space_size),
-                ),
-                dtype=np.float32,
-            )
-            if batched_step_result.action_mask is not None:
-                mask = 1 - np.concatenate(batched_step_result.action_mask, axis=1)
-            feed_dict[self.model.action_masks] = mask
+            feed_dict[self.model.action_masks] = brain_info.action_masks
         return feed_dict
 
     def make_empty_memory(self, num_agents):

@@ -1,3 +1,4 @@
+import os
 import json
 import math
 from typing import Dict, Any, TextIO
@@ -9,20 +10,21 @@ import logging
 logger = logging.getLogger("mlagents.trainers")
 
 
-class Curriculum:
-    def __init__(self, brain_name: str, config: Dict):
+class Curriculum(object):
+    def __init__(self, location):
         """
         Initializes a Curriculum object.
-        :param brain_name: Name of the brain this Curriculum is associated with
-        :param config: Dictionary of fields needed to configure the Curriculum
+        :param location: Path to JSON defining curriculum.
         """
         self.max_lesson_num = 0
         self.measure = None
         self._lesson_num = 0
-        self.brain_name = brain_name
-        self.config = config
+        # The name of the brain should be the basename of the file without the
+        # extension.
+        self._brain_name = os.path.basename(location).split(".")[0]
+        self.data = Curriculum.load_curriculum_file(location)
 
-        self.smoothing_value = 0.0
+        self.smoothing_value = 0
         for key in [
             "parameters",
             "measure",
@@ -30,21 +32,23 @@ class Curriculum:
             "min_lesson_length",
             "signal_smoothing",
         ]:
-            if key not in self.config:
+            if key not in self.data:
                 raise CurriculumConfigError(
-                    f"{brain_name} curriculum config does not contain a {key} field."
+                    "{0} does not contain a " "{1} field.".format(location, key)
                 )
         self.smoothing_value = 0
-        self.measure = self.config["measure"]
-        self.min_lesson_length = self.config["min_lesson_length"]
-        self.max_lesson_num = len(self.config["thresholds"])
+        self.measure = self.data["measure"]
+        self.min_lesson_length = self.data["min_lesson_length"]
+        self.max_lesson_num = len(self.data["thresholds"])
 
-        parameters = self.config["parameters"]
+        parameters = self.data["parameters"]
         for key in parameters:
             if len(parameters[key]) != self.max_lesson_num + 1:
                 raise CurriculumConfigError(
-                    f"The parameter {key} in {brain_name}'s curriculum must have {self.max_lesson_num + 1} values "
-                    f"but {len(parameters[key])} were found"
+                    "The parameter {0} in Curriculum {1} must have {2} values "
+                    "but {3} were found".format(
+                        key, location, self.max_lesson_num + 1, len(parameters[key])
+                    )
                 )
 
     @property
@@ -62,21 +66,21 @@ class Curriculum:
                steps completed).
         :return Whether the lesson was incremented.
         """
-        if not self.config or not measure_val or math.isnan(measure_val):
+        if not self.data or not measure_val or math.isnan(measure_val):
             return False
-        if self.config["signal_smoothing"]:
+        if self.data["signal_smoothing"]:
             measure_val = self.smoothing_value * 0.25 + 0.75 * measure_val
             self.smoothing_value = measure_val
         if self.lesson_num < self.max_lesson_num:
-            if measure_val > self.config["thresholds"][self.lesson_num]:
+            if measure_val > self.data["thresholds"][self.lesson_num]:
                 self.lesson_num += 1
                 config = {}
-                parameters = self.config["parameters"]
+                parameters = self.data["parameters"]
                 for key in parameters:
                     config[key] = parameters[key][self.lesson_num]
                 logger.info(
                     "{0} lesson changed. Now in lesson {1}: {2}".format(
-                        self.brain_name,
+                        self._brain_name,
                         self.lesson_num,
                         ", ".join([str(x) + " -> " + str(config[x]) for x in config]),
                     )
@@ -91,33 +95,33 @@ class Curriculum:
                current lesson is returned.
         :return: The configuration of the reset parameters.
         """
-        if not self.config:
+        if not self.data:
             return {}
         if lesson is None:
             lesson = self.lesson_num
         lesson = max(0, min(lesson, self.max_lesson_num))
         config = {}
-        parameters = self.config["parameters"]
+        parameters = self.data["parameters"]
         for key in parameters:
             config[key] = parameters[key][lesson]
         return config
 
     @staticmethod
-    def load_curriculum_file(config_path: str) -> Dict:
+    def load_curriculum_file(location: str) -> None:
         try:
-            with open(config_path) as data_file:
+            with open(location) as data_file:
                 return Curriculum._load_curriculum(data_file)
         except IOError:
             raise CurriculumLoadingError(
-                "The file {0} could not be found.".format(config_path)
+                "The file {0} could not be found.".format(location)
             )
         except UnicodeDecodeError:
             raise CurriculumLoadingError(
-                "There was an error decoding {}".format(config_path)
+                "There was an error decoding {}".format(location)
             )
 
     @staticmethod
-    def _load_curriculum(fp: TextIO) -> Dict:
+    def _load_curriculum(fp: TextIO) -> None:
         try:
             return json.load(fp)
         except json.decoder.JSONDecodeError as e:

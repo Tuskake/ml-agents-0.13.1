@@ -1,0 +1,1 @@
+gradient experiments run singlenode --name train --projectId pr0wxlszu --container tensorflow/tensorflow:2.0.0a0-gpu-py3-jupyter --machineType P4000 --command 'python3 -m pip install --upgrade setuptools && python ml-agents/setup.py install && mlagents-learn config/trainer_config.yaml --train --run-id b123' --workspace https://github.com/Tuskake/ml-agents-0.13.1.git

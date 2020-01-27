@@ -9,13 +9,13 @@ You can track many different things both related and unrelated to the agents
 themselves. By default, the Monitor is only active in the *inference* phase, so
 not during training. To change this behavior, you can activate or deactivate it
 by calling `SetActive(boolean)`. For example to also show the monitor during
-training, you can call it in the `Awake()` method of your `MonoBehaviour`:
+training, you can call it in the `InitializeAcademy()` method of your `Academy`:
 
 ```csharp
 using MLAgents;
 
-public class MyBehaviour : MonoBehaviour {
-    public void Awake()
+public class YourAcademy : Academy {
+    public override void InitializeAcademy()
     {
         Monitor.SetActive(true);
     }

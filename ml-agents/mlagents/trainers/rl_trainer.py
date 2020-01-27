@@ -13,9 +13,10 @@ LOGGER = logging.getLogger("mlagents.trainers")
 RewardSignalResults = Dict[str, RewardSignalResult]
 
 
-class RLTrainer(Trainer):  # pylint: disable=abstract-method
+class RLTrainer(Trainer):
     """
     This class is the base class for trainers that use Reward Signals.
+    Contains methods for adding BrainInfos to the Buffer.
     """
 
     def __init__(self, *args, **kwargs):
@@ -64,14 +65,7 @@ class RLTrainer(Trainer):  # pylint: disable=abstract-method
 
     def clear_update_buffer(self) -> None:
         """
-        Clear the buffers that have been built up during inference.
+        Clear the buffers that have been built up during inference. If
+        we're not training, this should be called instead of update_policy.
         """
         self.update_buffer.reset_agent()
-
-    def advance(self) -> None:
-        """
-        Steps the trainer, taking in trajectories and updates if ready
-        """
-        super().advance()
-        if not self.is_training:
-            self.clear_update_buffer()

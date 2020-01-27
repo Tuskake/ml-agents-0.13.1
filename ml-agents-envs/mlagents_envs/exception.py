@@ -27,14 +27,6 @@ class UnityCommunicationException(UnityException):
     pass
 
 
-class UnityObservationException(UnityException):
-    """
-    Related to errors with receiving observations.
-    """
-
-    pass
-
-
 class UnityActionException(UnityException):
     """
     Related to errors with sending actions.

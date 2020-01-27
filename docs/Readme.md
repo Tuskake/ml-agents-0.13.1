@@ -20,7 +20,8 @@
 
 * [Making a New Learning Environment](Learning-Environment-Create-New.md)
 * [Designing a Learning Environment](Learning-Environment-Design.md)
-* [Designing Agents](Learning-Environment-Design-Agents.md)
+  * [Agents](Learning-Environment-Design-Agents.md)
+  * [Academy](Learning-Environment-Design-Academy.md)
 * [Learning Environment Best Practices](Learning-Environment-Best-Practices.md)
 
 ### Advanced Usage
