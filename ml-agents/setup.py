@@ -54,7 +54,7 @@ setup(
     zip_safe=False,
     install_requires=[
         # Test-only dependencies should go in test_requirements.txt, not here.
-        "grpcio>=1.11.0",
+        "grpcio>=1.24.3",
         "h5py>=2.9.0",
         "jupyter",
         "matplotlib",
