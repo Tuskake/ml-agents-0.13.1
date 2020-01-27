@@ -3,14 +3,13 @@
 version: 2
 
 workflows:
-  
-  param-file-experiment-workflow:
+  experiment-workflow:
     steps:
       -
-        name: "param-file-experiment"
+        name: "my-experiment"
         command: experiment.run_single_node
         params:
-          command: mlagents-learn config/trainer_config.yaml --train --run-id=3DBall01
+          command: python mnist.py
           container: tensorflow/tensorflow:1.13.1-gpu-py3
           experimentEnv:
             EPOCHS_EVAL: 5
@@ -18,8 +17,32 @@ workflows:
             MAX_STEPS: 1000
             TRAIN_EPOCHS: 10
           machineType: P4000
-          modelPath: /config
-          modelType: test1
+          modelPath: /artifacts
+          modelType: Tensorflow
+          name: mnist-cli-config-yaml
+        checks: #[optional]
+          onnx:loss:
+            target: "0.0..0.5"
+            aggregate: "mean"
+          defaults: #[optional]
+            precision: 3
+      triggers:
+        branches:
+          ignore: irrelevant-branch
+        tags:
+          only:
+            - v.*
+            - latest
+  param-file-experiment-workflow:
+    steps:
+      -
+        name: "param-file-experiment"
+        command: experiment.run_single_node
+        paramsFile: .ps_project/param-file-experiment.yml
+        checks: #[optional]
+          custom:loss:
+            target: "0.0..0.5"
+            aggregate: "/mean/0"
       triggers:
         branches:
           only: master
