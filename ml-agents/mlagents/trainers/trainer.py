@@ -1,8 +1,6 @@
 # # Unity ML-Agents Toolkit
 import logging
 from typing import Dict, List, Deque, Any
-import time
-import abc
 
 from mlagents.tf_utils import tf
 from mlagents import tf_utils
@@ -14,10 +12,7 @@ from mlagents_envs.timers import set_gauge
 from mlagents.trainers.tf_policy import TFPolicy
 from mlagents.trainers.stats import StatsReporter
 from mlagents.trainers.trajectory import Trajectory
-from mlagents.trainers.agent_processor import AgentManagerQueue
 from mlagents.trainers.brain import BrainParameters
-from mlagents.trainers.policy import Policy
-from mlagents_envs.timers import hierarchical_timer
 
 LOGGER = logging.getLogger("mlagents.trainers")
 
@@ -30,7 +25,7 @@ class UnityTrainerException(UnityException):
     pass
 
 
-class Trainer(abc.ABC):
+class Trainer(object):
     """This class is the base class for the mlagents_envs.trainers"""
 
     def __init__(
@@ -58,14 +53,9 @@ class Trainer(abc.ABC):
         self.cumulative_returns_since_policy_update: List[float] = []
         self.is_training = training
         self._reward_buffer: Deque[float] = deque(maxlen=reward_buff_cap)
-        self.policy_queues: List[AgentManagerQueue[Policy]] = []
-        self.trajectory_queues: List[AgentManagerQueue[Trajectory]] = []
         self.step: int = 0
-        self.training_start_time = time.time()
-        self.summary_freq = self.trainer_parameters["summary_freq"]
-        self.next_summary_step = self.summary_freq
 
-    def _check_param_keys(self):
+    def check_param_keys(self):
         for k in self.param_keys:
             if k not in self.trainer_parameters:
                 raise UnityTrainerException(
@@ -94,7 +84,7 @@ class Trainer(abc.ABC):
             LOGGER.info("Could not write text summary for Tensorboard.")
             pass
 
-    def _dict_to_str(self, param_dict: Dict[str, Any], num_tabs: int) -> str:
+    def dict_to_str(self, param_dict: Dict[str, Any], num_tabs: int) -> str:
         """
         Takes a parameter dictionary and converts it to a human-readable string.
         Recurses if there are multiple levels of dict. Used to print out hyperaparameters.
@@ -110,7 +100,7 @@ class Trainer(abc.ABC):
                     "\t"
                     + "  " * num_tabs
                     + "{0}:\t{1}".format(
-                        x, self._dict_to_str(param_dict[x], num_tabs + 1)
+                        x, self.dict_to_str(param_dict[x], num_tabs + 1)
                     )
                     for x in param_dict
                 ]
@@ -120,7 +110,7 @@ class Trainer(abc.ABC):
         return """Hyperparameters for the {0} of brain {1}: \n{2}""".format(
             self.__class__.__name__,
             self.brain_name,
-            self._dict_to_str(self.trainer_parameters, 0),
+            self.dict_to_str(self.trainer_parameters, 0),
         )
 
     @property
@@ -131,12 +121,12 @@ class Trainer(abc.ABC):
         return self.trainer_parameters
 
     @property
-    def get_max_steps(self) -> int:
+    def get_max_steps(self) -> float:
         """
         Returns the maximum number of steps. Is used to know when the trainer should be stopped.
         :return: The maximum number of steps of the trainer
         """
-        return int(float(self.trainer_parameters["max_steps"]))
+        return float(self.trainer_parameters["max_steps"])
 
     @property
     def get_step(self) -> int:
@@ -145,15 +135,6 @@ class Trainer(abc.ABC):
         :return: the step count of the trainer
         """
         return self.step
-
-    @property
-    def should_still_train(self) -> bool:
-        """
-        Returns whether or not the trainer should train. A Trainer could
-        stop training if it wasn't training to begin with, or if max_steps
-        is reached.
-        """
-        return self.is_training and self.get_step <= self.get_max_steps
 
     @property
     def reward_buffer(self) -> Deque[float]:
@@ -165,22 +146,13 @@ class Trainer(abc.ABC):
         """
         return self._reward_buffer
 
-    def _increment_step(self, n_steps: int, name_behavior_id: str) -> None:
+    def increment_step(self, n_steps: int) -> None:
         """
         Increment the step count of the trainer
+
         :param n_steps: number of steps to increment the step count by
         """
         self.step += n_steps
-        self.next_summary_step = self._get_next_summary_step()
-        p = self.get_policy(name_behavior_id)
-        if p:
-            p.increment_step(n_steps)
-
-    def _get_next_summary_step(self) -> int:
-        """
-        Get the next step count that should result in a summary write.
-        """
-        return self.step + (self.summary_freq - self.step % self.summary_freq)
 
     def save_model(self, name_behavior_id: str) -> None:
         """
@@ -194,137 +166,97 @@ class Trainer(abc.ABC):
         """
         self.get_policy(name_behavior_id).export_model()
 
-    def _write_summary(self, step: int) -> None:
+    def write_summary(self, global_step: int, delta_train_start: float) -> None:
         """
         Saves training statistics to Tensorboard.
+        :param delta_train_start:  Time elapsed since training started.
+        :param global_step: The number of steps the simulation has been going for
         """
-        is_training = "Training." if self.should_still_train else "Not Training."
-        stats_summary = self.stats_reporter.get_stats_summaries(
-            "Environment/Cumulative Reward"
-        )
-        if stats_summary.num > 0:
-            LOGGER.info(
-                " {}: {}: Step: {}. "
-                "Time Elapsed: {:0.3f} s "
-                "Mean "
-                "Reward: {:0.3f}"
-                ". Std of Reward: {:0.3f}. {}".format(
-                    self.run_id,
-                    self.brain_name,
-                    step,
-                    time.time() - self.training_start_time,
-                    stats_summary.mean,
-                    stats_summary.std,
-                    is_training,
-                )
+        if (
+            global_step % self.trainer_parameters["summary_freq"] == 0
+            and global_step != 0
+        ):
+            is_training = (
+                "Training."
+                if self.is_training and self.get_step <= self.get_max_steps
+                else "Not Training."
             )
-            set_gauge(f"{self.brain_name}.mean_reward", stats_summary.mean)
-        else:
-            LOGGER.info(
-                " {}: {}: Step: {}. No episode was completed since last summary. {}".format(
-                    self.run_id, self.brain_name, step, is_training
-                )
+            step = min(self.get_step, self.get_max_steps)
+            stats_summary = self.stats_reporter.get_stats_summaries(
+                "Environment/Cumulative Reward"
             )
-        self.stats_reporter.write_stats(int(step))
+            if stats_summary.num > 0:
+                LOGGER.info(
+                    " {}: {}: Step: {}. "
+                    "Time Elapsed: {:0.3f} s "
+                    "Mean "
+                    "Reward: {:0.3f}"
+                    ". Std of Reward: {:0.3f}. {}".format(
+                        self.run_id,
+                        self.brain_name,
+                        step,
+                        delta_train_start,
+                        stats_summary.mean,
+                        stats_summary.std,
+                        is_training,
+                    )
+                )
+                set_gauge(f"{self.brain_name}.mean_reward", stats_summary.mean)
+            else:
+                LOGGER.info(
+                    " {}: {}: Step: {}. No episode was completed since last summary. {}".format(
+                        self.run_id, self.brain_name, step, is_training
+                    )
+                )
+            self.stats_reporter.write_stats(int(step))
 
-    @abc.abstractmethod
-    def _process_trajectory(self, trajectory: Trajectory) -> None:
+    def process_trajectory(self, trajectory: Trajectory) -> None:
         """
         Takes a trajectory and processes it, putting it into the update buffer.
+        Processing involves calculating value and advantage targets for model updating step.
         :param trajectory: The Trajectory tuple containing the steps to be processed.
         """
-        self._maybe_write_summary(self.get_step + len(trajectory.steps))
-        self._increment_step(len(trajectory.steps), trajectory.behavior_id)
+        raise UnityTrainerException(
+            "The process_experiences method was not implemented."
+        )
 
-    def _maybe_write_summary(self, step_after_process: int) -> None:
-        """
-        If processing the trajectory will make the step exceed the next summary write,
-        write the summary. This logic ensures summaries are written on the update step and not in between.
-        :param step_after_process: the step count after processing the next trajectory.
-        """
-        if step_after_process >= self.next_summary_step and self.get_step != 0:
-            self._write_summary(self.next_summary_step)
-
-    @abc.abstractmethod
     def end_episode(self):
         """
         A signal that the Episode has ended. The buffer must be reset.
         Get only called when the academy resets.
         """
-        pass
+        raise UnityTrainerException("The end_episode method was not implemented.")
 
-    @abc.abstractmethod
-    def create_policy(self, brain_parameters: BrainParameters) -> TFPolicy:
-        """
-        Creates policy
-        """
-        pass
-
-    @abc.abstractmethod
-    def add_policy(self, name_behavior_id: str, policy: TFPolicy) -> None:
-        """
-        Adds policy to trainer
-        """
-        pass
-
-    @abc.abstractmethod
-    def get_policy(self, name_behavior_id: str) -> TFPolicy:
-        """
-        Gets policy from trainer
-        """
-        pass
-
-    @abc.abstractmethod
-    def _is_ready_update(self):
+    def is_ready_update(self):
         """
         Returns whether or not the trainer has enough elements to run update model
         :return: A boolean corresponding to wether or not update_model() can be run
         """
-        return False
+        raise UnityTrainerException("The is_ready_update method was not implemented.")
 
-    @abc.abstractmethod
-    def _update_policy(self):
+    def update_policy(self):
         """
         Uses demonstration_buffer to update model.
         """
-        pass
+        raise UnityTrainerException("The update_model method was not implemented.")
+
+    def create_policy(self, brain_parameters: BrainParameters) -> TFPolicy:
+        """
+        Creates policy
+        """
+        raise UnityTrainerException("The create_policy method was not implemented.")
+
+    def add_policy(self, name_behavior_id: str, policy: TFPolicy) -> None:
+        """
+        Adds policy to trainer
+        """
+        raise UnityTrainerException("The add_policy method was not implemented")
+
+    def get_policy(self, name_behavior_id: str) -> TFPolicy:
+        """
+        Gets policy from trainer
+        """
+        raise UnityTrainerException("The get_policy method was not implemented.")
 
     def advance(self) -> None:
-        """
-        Steps the trainer, taking in trajectories and updates if ready.
-        """
-        with hierarchical_timer("process_trajectory"):
-            for traj_queue in self.trajectory_queues:
-                # We grab at most the maximum length of the queue.
-                # This ensures that even if the queue is being filled faster than it is
-                # being emptied, the trajectories in the queue are on-policy.
-                for _ in range(traj_queue.maxlen):
-                    try:
-                        t = traj_queue.get_nowait()
-                        self._process_trajectory(t)
-                    except AgentManagerQueue.Empty:
-                        break
-        if self.should_still_train:
-            if self._is_ready_update():
-                with hierarchical_timer("_update_policy"):
-                    self._update_policy()
-                    for q in self.policy_queues:
-                        # Get policies that correspond to the policy queue in question
-                        q.put(self.get_policy(q.behavior_id))
-
-    def publish_policy_queue(self, policy_queue: AgentManagerQueue[Policy]) -> None:
-        """
-        Adds a policy queue to the list of queues to publish to when this Trainer
-        makes a policy update
-        :param queue: Policy queue to publish to.
-        """
-        self.policy_queues.append(policy_queue)
-
-    def subscribe_trajectory_queue(
-        self, trajectory_queue: AgentManagerQueue[Trajectory]
-    ) -> None:
-        """
-        Adds a trajectory queue to the list of queues for the trainer injest Trajectories from.
-        :param queue: Trajectory queue to publish to.
-        """
-        self.trajectory_queues.append(trajectory_queue)
+        pass

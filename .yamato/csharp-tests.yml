@@ -12,7 +12,7 @@ test_mac_editmode_{{ editor.version }}:
   variables:
     UNITY_VERSION: {{ editor.version }}
   commands:
-    - python -u -m ml-agents.tests.yamato.editmode_tests
+    - ./run-tests-editmode-osx-editor.sh
   triggers:
     pull_requests:
       - targets:
@@ -20,8 +20,4 @@ test_mac_editmode_{{ editor.version }}:
             - "master"
             - "/release-.*/"
             - "/hotfix-.*/"
-  artifacts:
-    unit:
-      paths:
-        - "artifacts/**"
 {% endfor %}
