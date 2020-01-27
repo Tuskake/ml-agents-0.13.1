@@ -19,7 +19,8 @@ workflows:
             TRAIN_EPOCHS: 10
           machineType: P4000
           modelPath: /config
-          modelType: test1
+          modelType: Tensorflow
+          name: mnist-cli-config-yaml
       triggers:
         branches:
           only: master
