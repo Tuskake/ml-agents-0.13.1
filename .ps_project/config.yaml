@@ -1,0 +1,25 @@
+# .ps_project/config.yaml:
+
+version: 2
+
+workflows:
+  
+  param-file-experiment-workflow:
+    steps:
+      -
+        name: "param-file-experiment"
+        command: experiment.run_single_node
+        params:
+          command: mlagents-learn config/trainer_config.yaml --train --run-id=3DBall01
+          container: tensorflow/tensorflow:1.13.1-gpu-py3
+          experimentEnv:
+            EPOCHS_EVAL: 5
+            EVAL_SECS: 10
+            MAX_STEPS: 1000
+            TRAIN_EPOCHS: 10
+          machineType: P4000
+          modelPath: /config
+          modelType: test1
+      triggers:
+        branches:
+          only: master
