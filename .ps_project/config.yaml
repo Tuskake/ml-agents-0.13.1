@@ -1,11 +1,7 @@
-# .ps_project/config.yaml:
-
 version: 1
-
 workflows:
   experiment-workflow:
     steps:
-      -
         name: "param-file-experiment"
         command: experiment.run_single_node
         params:
@@ -20,6 +16,6 @@ workflows:
           modelPath: /model
           modelType: Tensorflow
           name: mnist-cli-config-yaml
-      triggers:
-        branches:
-          only: master
+triggers: 
+      branches:
+      only: master
