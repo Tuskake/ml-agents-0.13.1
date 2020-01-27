@@ -1,0 +1,1 @@
+gradient experiments run singlenode --name train --projectId pr0wxlszu --container ufoym/deepo:all-py36-jupyter --machineType P4000 --command 'python3 -m pip install --upgrade setuptools && pip install mlagents && mlagents-learn config/trainer_config.yaml --train --run-id b123' --workspace https://github.com/Tuskake/ml-agents-0.13.1.git
