@@ -1,10 +1,9 @@
 # .ps_project/config.yaml:
 
-version: 2
+version: 1
 
 workflows:
-  
-  param-file-experiment-workflow:
+  experiment-workflow:
     steps:
       -
         name: "param-file-experiment"
@@ -18,7 +17,7 @@ workflows:
             MAX_STEPS: 1000
             TRAIN_EPOCHS: 10
           machineType: P4000
-          modelPath: /config
+          modelPath: /model
           modelType: Tensorflow
           name: mnist-cli-config-yaml
       triggers:
