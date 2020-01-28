@@ -8,14 +8,20 @@ using System.Reflection;
 
 namespace MLAgents.Tests
 {
+    [TestFixture]
     public class EditModeTestInternalBrainTensorGenerator
     {
-        static IEnumerable<Agent> GetFakeAgents()
+        [SetUp]
+        public void SetUp()
         {
-            var acaGo = new GameObject("TestAcademy");
-            acaGo.AddComponent<TestAcademy>();
-            var aca = acaGo.GetComponent<TestAcademy>();
+            if (Academy.IsInitialized)
+            {
+                Academy.Instance.Dispose();
+            }
+        }
 
+        static List<TestAgent> GetFakeAgents()
+        {
             var goA = new GameObject("goA");
             var bpA = goA.AddComponent<BehaviorParameters>();
             bpA.brainParameters.vectorObservationSize = 3;
@@ -28,12 +34,12 @@ namespace MLAgents.Tests
             bpB.brainParameters.numStackedVectorObservations = 1;
             var agentB = goB.AddComponent<TestAgent>();
 
-            var agents = new List<Agent> { agentA, agentB };
+            var agents = new List<TestAgent> { agentA, agentB };
             foreach (var agent in agents)
             {
                 var agentEnableMethod = typeof(Agent).GetMethod("OnEnableHelper",
                     BindingFlags.Instance | BindingFlags.NonPublic);
-                agentEnableMethod?.Invoke(agent, new object[] { aca });
+                agentEnableMethod?.Invoke(agent, new object[] { });
             }
             agentA.collectObservationsSensor.AddObservation(new Vector3(1, 2, 3));
             agentB.collectObservationsSensor.AddObservation(new Vector3(4, 5, 6));
@@ -50,9 +56,9 @@ namespace MLAgents.Tests
                 actionMasks = new[] { true, false, false, false, false },
             };
 
-            agentA.Info = infoA;
-            agentB.Info = infoB;
 
+            agentA._Info = infoA;
+            agentB._Info = infoB;
             return agents;
         }
 
@@ -106,7 +112,14 @@ namespace MLAgents.Tests
             generator.AddSensorIndex(0);
             generator.AddSensorIndex(1);
             generator.AddSensorIndex(2);
-            generator.Generate(inputTensor, batchSize, agentInfos);
+            var agent0 = agentInfos[0];
+            var agent1 = agentInfos[1];
+            var inputs = new List<AgentInfoSensorsPair>
+            {
+                new AgentInfoSensorsPair{agentInfo = agent0._Info, sensors = agent0.sensors},
+                new AgentInfoSensorsPair{agentInfo = agent1._Info, sensors = agent1.sensors},
+            };
+            generator.Generate(inputTensor, batchSize, inputs);
             Assert.IsNotNull(inputTensor.data);
             Assert.AreEqual(inputTensor.data[0, 0], 1);
             Assert.AreEqual(inputTensor.data[0, 2], 3);
@@ -127,8 +140,14 @@ namespace MLAgents.Tests
             var agentInfos = GetFakeAgents();
             var alloc = new TensorCachingAllocator();
             var generator = new PreviousActionInputGenerator(alloc);
-
-            generator.Generate(inputTensor, batchSize, agentInfos);
+            var agent0 = agentInfos[0];
+            var agent1 = agentInfos[1];
+            var inputs = new List<AgentInfoSensorsPair>
+            {
+                new AgentInfoSensorsPair{agentInfo = agent0._Info, sensors = agent0.sensors},
+                new AgentInfoSensorsPair{agentInfo = agent1._Info, sensors = agent1.sensors},
+            };
+            generator.Generate(inputTensor, batchSize, inputs);
             Assert.IsNotNull(inputTensor.data);
             Assert.AreEqual(inputTensor.data[0, 0], 1);
             Assert.AreEqual(inputTensor.data[0, 1], 2);
@@ -149,7 +168,16 @@ namespace MLAgents.Tests
             var agentInfos = GetFakeAgents();
             var alloc = new TensorCachingAllocator();
             var generator = new ActionMaskInputGenerator(alloc);
-            generator.Generate(inputTensor, batchSize, agentInfos);
+
+            var agent0 = agentInfos[0];
+            var agent1 = agentInfos[1];
+            var inputs = new List<AgentInfoSensorsPair>
+            {
+                new AgentInfoSensorsPair{agentInfo = agent0._Info, sensors = agent0.sensors},
+                new AgentInfoSensorsPair{agentInfo = agent1._Info, sensors = agent1.sensors},
+            };
+
+            generator.Generate(inputTensor, batchSize, inputs);
             Assert.IsNotNull(inputTensor.data);
             Assert.AreEqual(inputTensor.data[0, 0], 1);
             Assert.AreEqual(inputTensor.data[0, 4], 1);
