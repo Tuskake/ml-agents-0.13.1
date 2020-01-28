@@ -152,7 +152,7 @@ VisualPyramids:
     summary_freq: 1000
     time_horizon: 1000
     hidden_units: 64
-    max_steps: 2e5
+    max_steps: 1e4
     reward_signals:
         extrinsic:
             strength: 1.0
